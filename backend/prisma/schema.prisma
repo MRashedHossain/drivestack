@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+}
+
+// The main user of the app (logged in via Google)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  avatar    String?
+  createdAt DateTime @default(now())
+
+  // One user can have many connected Google accounts
+  connectedAccounts ConnectedAccount[]
+  files             File[]
+  folders           Folder[]
+}
+
+// Each additional Google account linked by the user
+model ConnectedAccount {
+  id           String   @id @default(uuid())
+  userId       String
+  googleEmail  String
+  accessToken  String   // will be encrypted before saving
+  refreshToken String   // will be encrypted before saving
+  createdAt    DateTime @default(now())
+
+  // Which user owns this connected account
+  user  User   @relation(fields: [userId], references: [id])
+  files File[]
+
+  // Same Google account can't be linked twice to the same user
+  @@unique([userId, googleEmail])
+}
+
+// A file stored in one of the connected Google Drive accounts
+model File {
+  id          String   @id @default(uuid())
+  userId      String
+  accountId   String
+  driveFileId String   // the actual file ID in Google Drive
+  name        String
+  size        BigInt
+  mimeType    String
+  folderId    String?  // null means root folder
+  createdAt   DateTime @default(now())
+
+  user     User             @relation(fields: [userId], references: [id])
+  account  ConnectedAccount @relation(fields: [accountId], references: [id])
+  folder   Folder?          @relation(fields: [folderId], references: [id])
+}
+
+// Virtual folders (not real Drive folders, just our own layer)
+model Folder {
+  id        String   @id @default(uuid())
+  userId    String
+  name      String
+  parentId  String?  // null means root, otherwise points to parent folder
+  createdAt DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  files    File[]
+
+  // Self-relation for nested folders
+  parent   Folder?  @relation("FolderToFolder", fields: [parentId], references: [id])
+  children Folder[] @relation("FolderToFolder")
+}
