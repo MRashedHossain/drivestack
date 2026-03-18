@@ -14,7 +14,7 @@ export async function uploadFile(
 ) {
     // Pick the account with the most free space that can fit this file
     const account = await getBestAccountForUpload(userId, fileBuffer.length);
-  const auth = getOAuthClient(account.accessToken, account.refreshToken);
+  const auth = getOAuthClient(account.accessToken, account.refreshToken, account.id);
   const drive = google.drive({ version: "v3", auth });
 
   // Convert the file buffer to a readable stream (Drive API needs a stream)
@@ -64,7 +64,7 @@ export async function downloadFile(fileId: string, userId: string) {
     throw new Error("File not found");
   }
 
-  const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken);
+  const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken, file.account.id);
   const drive = google.drive({ version: "v3", auth });
 
   // Get the file as a stream from Google Drive
@@ -91,7 +91,7 @@ export async function deleteFile(fileId: string, userId: string) {
     throw new Error("File not found");
   }
 
-  const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken);
+  const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken, file.account.id);
   const drive = google.drive({ version: "v3", auth });
 
   // Delete from Google Drive
@@ -114,7 +114,7 @@ export async function renameFile(fileId: string, userId: string, newName: string
     throw new Error("File not found");
   }
 
-  const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken);
+ const auth = getOAuthClient(file.account.accessToken, file.account.refreshToken, file.account.id);
   const drive = google.drive({ version: "v3", auth });
 
   // Update name in Google Drive
