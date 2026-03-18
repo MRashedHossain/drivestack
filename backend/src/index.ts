@@ -8,6 +8,7 @@ import session from "express-session";
 import passport from "./lib/passport";
 import prisma from "./lib/prisma";
 import authRoutes from "./routes/auth";
+import storageRoutes from "./routes/storage"
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,8 @@ app.use(passport.session());
 
 // Routes
 app.use("/auth", authRoutes);
+
+app.use("/storage", storageRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "DriveStack backend is running 🚀" });
