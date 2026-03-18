@@ -33,7 +33,7 @@ router.get(
   passport.authenticate("google", { failureRedirect: "/auth/failed" }),
   (req: Request, res: Response) => {
     // Login successful — redirect to frontend dashboard
-    res.redirect("http://localhost:3000/dashboard");
+    res.redirect("http://localhost:5173/dashboard");
   }
 );
 
