@@ -10,6 +10,7 @@ import prisma from "./lib/prisma";
 import authRoutes from "./routes/auth";
 import storageRoutes from "./routes/storage"
 import fileRoutes from "./routes/files";
+import folderRoutes from "./routes/folders";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,6 +38,8 @@ app.use("/auth", authRoutes);
 app.use("/storage", storageRoutes);
 
 app.use("/files", fileRoutes);
+
+app.use("/folders", folderRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "DriveStack backend is running 🚀" });
