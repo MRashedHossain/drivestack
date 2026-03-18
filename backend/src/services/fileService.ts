@@ -133,20 +133,18 @@ export async function renameFile(fileId: string, userId: string, newName: string
 }
 
 // List all files for a user (optionally filtered by folder)
-export async function listFiles(userId: string, folderId?: string) {
-  const files = await prisma.file.findMany({
-    where: {
-      userId,
-      folderId: folderId ?? null,
-    },
-    include: {
-      account: {
-        select: { googleEmail: true }, // show which account each file is on
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+    export async function listFiles(userId: string, folderId?: string, all?: boolean) {
+    const files = await prisma.file.findMany({
+        where: {
+        userId,
+        // if all=true, skip folder filter entirely
+        ...(all ? {} : { folderId: folderId ?? null }),
+        },
+        include: {
+        account: { select: { googleEmail: true } },
+        },
+        orderBy: { createdAt: "desc" },
+    });
 
-  // Convert BigInt size to string for each file
-  return files.map((f) => ({ ...f, size: f.size.toString() }));
+    return files.map((f) => ({ ...f, size: f.size.toString() }));
 }

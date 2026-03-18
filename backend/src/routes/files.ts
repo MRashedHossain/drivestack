@@ -28,7 +28,8 @@ router.get("/", requireAuth, async (req: Request, res: Response) => {
   try {
     const user = req.user as any;
     const folderId = req.query.folderId as string | undefined;
-    const files = await listFiles(user.id, folderId);
+    const all = req.query.all === "true";
+    const files = await listFiles(user.id, folderId, all);
     res.json(files);
   } catch (err) {
     console.error("List files error:", err);
