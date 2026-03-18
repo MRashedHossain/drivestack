@@ -56,8 +56,8 @@ export async function getAggregatedStorage(userId: string) {
 }
 
 // Pick the best account to upload a file to
-// Strategy: choose the account with the most free space
-export async function getBestAccountForUpload(userId: string) {
+// Strategy: choose the account with the most free space that can fit the file
+export async function getBestAccountForUpload(userId: string, fileSizeInBytes: number) {
   const accounts = await prisma.connectedAccount.findMany({
     where: { userId },
   });
@@ -66,7 +66,6 @@ export async function getBestAccountForUpload(userId: string) {
     throw new Error("No connected accounts found");
   }
 
-  // Fetch quota for all accounts in parallel
   const accountStorages = await Promise.all(
     accounts.map(async (account) => {
       try {
@@ -78,12 +77,14 @@ export async function getBestAccountForUpload(userId: string) {
     })
   );
 
-  // Sort by free space descending, pick the one with most space
   accountStorages.sort((a, b) => b.free - a.free);
   const best = accountStorages[0];
 
-  if (best.free === 0) {
-    throw new Error("No storage space available across all accounts");
+  // Check if the best account has enough space for this specific file
+  if (best.free === 0 || best.free < fileSizeInBytes) {
+    throw new Error(
+      `Not enough storage on any single account. Need ${fileSizeInBytes} bytes but best account only has ${best.free} bytes free. Try linking more Google accounts.`
+    );
   }
 
   return best.account;
