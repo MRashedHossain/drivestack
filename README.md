@@ -52,7 +52,9 @@ A full-stack web application that lets you connect multiple Google accounts and 
 - **Storage overview** — See total/used/free storage per account and combined
 - **File explorer** — Browse files and folders just like Google Drive
 - **Upload with progress** — Click to upload with a real-time progress bar
-- **Smart account selection** — Automatically uploads to the account with the most free space
+- **Account selector on upload** — Choose which Google account to upload to, or let DriveStack auto-select
+- **Smart auto-selection** — Auto-select fills up the most-used account first before moving to the next one
+- **DriveStack folder** — All files are uploaded into a `DriveStack` folder inside Google Drive, keeping your Drive organized
 - **Virtual folder system** — Create folders and subfolders (not tied to Google Drive folders)
 - **File operations** — Upload, download, rename, move, and delete files
 - **Search** — Search files across all folders and accounts
@@ -96,16 +98,16 @@ drivestack/
 │   │   │   ├── folders.ts          # Folder CRUD, move files
 │   │   │   └── storage.ts          # Storage overview
 │   │   ├── services/
-│   │   │   ├── driveService.ts     # Google Drive API wrapper
+│   │   │   ├── driveService.ts     # Google Drive API wrapper + DriveStack folder
 │   │   │   ├── fileService.ts      # File operations logic
 │   │   │   ├── folderService.ts    # Folder operations logic
-│   │   │   └── storageService.ts   # Storage aggregation logic
+│   │   │   └── storageService.ts   # Storage aggregation + account selection logic
 │   │   └── index.ts                # Express app entry point
 │   └── package.json
 └── frontend/
     ├── src/
     │   ├── components/
-    │   │   ├── FileExplorer.tsx    # Main file browser
+    │   │   ├── FileExplorer.tsx    # Main file browser + account selector
     │   │   ├── Sidebar.tsx         # Storage overview + account list
     │   │   └── StorageBar.tsx      # Storage progress bar component
     │   ├── context/
@@ -154,7 +156,7 @@ Folder
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/files` | List files (optionally by folder) |
-| POST | `/files/upload` | Upload a file |
+| POST | `/files/upload` | Upload a file (optionally specify accountId) |
 | GET | `/files/:id/download` | Download a file |
 | PATCH | `/files/:id/rename` | Rename a file |
 | DELETE | `/files/:id` | Delete a file |
@@ -250,6 +252,15 @@ npm run dev
 ```bash
 cd ../frontend
 npm install
+```
+
+Create a `.env` file:
+```env
+VITE_API_URL=http://localhost:5000
+```
+
+Start the frontend:
+```bash
 npm run dev
 ```
 
@@ -260,10 +271,19 @@ Open `http://localhost:5173` in your browser.
 ## How It Works
 
 ### Storage Aggregation
-Each connected Google account provides 15GB of free storage. DriveStack fetches the quota from each account via the Google Drive API and combines them into a single total. When uploading a file, it automatically picks the account with the most free space.
+Each connected Google account provides 15GB of free storage. DriveStack fetches the quota from each account via the Google Drive API and combines them into a single total.
+
+### Smart Account Selection
+When uploading without selecting a specific account, DriveStack automatically picks the account with the **least free space that still has enough room** for the file. This fills up one account completely before moving to the next, keeping your storage organized.
+
+### Manual Account Selection
+You can also manually pick which Google account to upload to using the dropdown next to the Upload button. This is useful when you want to control exactly where a file goes.
+
+### DriveStack Folder
+All files uploaded via DriveStack are stored inside a folder named `DriveStack` in Google Drive. This keeps your Drive organized and separates DriveStack files from your personal files. The folder is created automatically on first upload if it doesn't exist.
 
 ### Virtual File System
-Folders in DriveStack are **virtual** — they exist only in our PostgreSQL database, not in Google Drive. Google Drive stores the raw files. This lets us manage a clean folder hierarchy independently of how files are stored across multiple Drive accounts.
+Folders in DriveStack are **virtual** — they exist only in our PostgreSQL database, not in Google Drive. Google Drive stores the raw files inside the `DriveStack` folder. This lets us manage a clean folder hierarchy independently of how files are stored across multiple Drive accounts.
 
 ### Account Linking
 A single DriveStack user can link multiple Google accounts. The primary account is used to log in. Additional accounts are linked via `/auth/google/link` which uses session state to associate the new Google account with the existing user without creating a duplicate.
@@ -278,16 +298,6 @@ When Google access tokens expire (after 1 hour), the OAuth client automatically 
 - **File size** — Large files are loaded into memory before uploading to Drive. Streaming upload for very large files is not yet implemented.
 - **Account merging** — If you log in with a secondary Google account directly (instead of linking it), it creates a separate user. Cross-account merging is not supported.
 - **Google verification** — The app is in testing mode. Only approved test users can log in. Public access requires Google's OAuth verification process.
-
----
-
-## Roadmap
-
-- [ ] Streaming upload for large files
-- [ ] File chunking across accounts (files larger than any single account's free space)
-- [ ] Shareable download links (public links without login)
-- [ ] Client-side file encryption before upload
-- [ ] Deployment guide (Railway + Vercel)
 
 ---
 
