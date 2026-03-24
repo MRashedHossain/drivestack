@@ -18,6 +18,11 @@ interface Folder {
   createdAt: string;
 }
 
+interface Account {
+  id: string;
+  googleEmail: string;
+}
+
 export default function FileExplorer() {
   const [files, setFiles] = useState<File[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
@@ -36,6 +41,8 @@ export default function FileExplorer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<File[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   const fetchContents = async (folderId: string | null) => {
     const [filesRes, foldersRes] = await Promise.all([
@@ -52,16 +59,16 @@ export default function FileExplorer() {
     setBreadcrumb(res.data);
   };
 
-  // Fetch folders for the move browser at a specific level
+  const fetchAccounts = async () => {
+    const res = await api.get("/storage/overview");
+    setAccounts(res.data.accounts);
+  };
+
   const fetchMoveBrowserFolders = async (folderId: string | null) => {
     const res = await api.get("/folders", { params: folderId ? { parentId: folderId } : {} });
     setMoveBrowserFolders(res.data);
     setMoveBrowserFolder(folderId);
-
-    if (!folderId) {
-      setMoveBreadcrumb([]);
-      return;
-    }
+    if (!folderId) { setMoveBreadcrumb([]); return; }
     const breadRes = await api.get(`/folders/${folderId}/breadcrumb`);
     setMoveBreadcrumb(breadRes.data);
   };
@@ -69,13 +76,11 @@ export default function FileExplorer() {
   useEffect(() => {
     fetchContents(currentFolder);
     fetchBreadcrumb(currentFolder);
+    fetchAccounts();
   }, [currentFolder]);
 
-  // When move mode starts, load root folders in the move browser
   useEffect(() => {
-    if (movingFileId) {
-      fetchMoveBrowserFolders(null);
-    }
+    if (movingFileId) fetchMoveBrowserFolders(null);
   }, [movingFileId]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,6 +91,7 @@ export default function FileExplorer() {
     const formData = new FormData();
     formData.append("file", file);
     if (currentFolder) formData.append("folderId", currentFolder);
+    if (selectedAccountId) formData.append("accountId", selectedAccountId);
     try {
       await api.post("/files/upload", formData, {
         onUploadProgress: (progressEvent) => {
@@ -96,6 +102,7 @@ export default function FileExplorer() {
         },
       });
       fetchContents(currentFolder);
+      fetchAccounts();
     } catch (err: any) {
       alert(err.response?.data?.message || "Upload failed");
     } finally {
@@ -112,7 +119,7 @@ export default function FileExplorer() {
 
   const handleDownload = (fileId: string, fileName: string) => {
     const link = document.createElement("a");
-    link.href = `http://localhost:5000/files/${fileId}/download`;
+    link.href = `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/files/${fileId}/download`;
     link.download = fileName;
     link.click();
   };
@@ -179,6 +186,7 @@ export default function FileExplorer() {
 
   return (
     <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      {/* Toolbar */}
       <div className="border-b border-gray-800 p-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 text-sm">
           <button onClick={() => { setCurrentFolder(null); clearSearch(); }} className="text-blue-400 hover:text-blue-300">
@@ -221,13 +229,28 @@ export default function FileExplorer() {
           >
             New Folder
           </button>
-          <label className={`cursor-pointer text-sm px-3 py-1.5 rounded-lg font-medium transition-colors ${uploading ? "bg-blue-700 text-blue-200" : "bg-blue-500 hover:bg-blue-600 text-white"}`}>
-            {uploading ? `Uploading ${uploadProgress}%` : "Upload File"}
-            <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-          </label>
+          <div className="flex items-center gap-0">
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="bg-gray-800 text-gray-300 text-sm px-2 py-1.5 rounded-l-lg border border-r-0 border-gray-700 focus:outline-none focus:border-blue-500 max-w-36"
+            >
+              <option value="">Auto select</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.googleEmail.split("@")[0]}
+                </option>
+              ))}
+            </select>
+            <label className={`cursor-pointer text-sm px-3 py-1.5 rounded-r-lg font-medium transition-colors ${uploading ? "bg-blue-700 text-blue-200" : "bg-blue-500 hover:bg-blue-600 text-white"}`}>
+              {uploading ? `Uploading ${uploadProgress}%` : "Upload File"}
+              <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+            </label>
+          </div>
         </div>
       </div>
 
+      {/* New folder input */}
       {showNewFolder && (
         <div className="p-4 border-b border-gray-800 flex items-center gap-2">
           <input
@@ -247,10 +270,11 @@ export default function FileExplorer() {
         </div>
       )}
 
+      {/* Upload progress */}
       {uploading && (
         <div className="px-4 py-3 border-b border-gray-800 flex flex-col gap-2">
           <div className="flex justify-between text-xs text-gray-400">
-            <span>Uploading...</span>
+            <span>Uploading{selectedAccountId ? ` to ${accounts.find(a => a.id === selectedAccountId)?.googleEmail.split("@")[0]}` : " (auto)"}...</span>
             <span>{uploadProgress}%</span>
           </div>
           <div className="w-full bg-gray-800 rounded-full h-1.5">
@@ -262,6 +286,7 @@ export default function FileExplorer() {
         </div>
       )}
 
+      {/* Search results count */}
       {searchResults !== null && (
         <div className="px-4 py-2 border-b border-gray-800 text-xs text-gray-500">
           {searchResults.length} result{searchResults.length !== 1 ? "s" : ""} for "{searchQuery}"
@@ -273,42 +298,24 @@ export default function FileExplorer() {
         <div className="border-b border-gray-800 bg-gray-900 px-4 py-3 flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <span className="text-gray-300 text-sm font-medium">Move file to...</span>
-            <button onClick={() => setMovingFileId(null)} className="text-gray-500 hover:text-white text-xs">
-              Cancel
-            </button>
+            <button onClick={() => setMovingFileId(null)} className="text-gray-500 hover:text-white text-xs">Cancel</button>
           </div>
-
-          {/* Move breadcrumb */}
           <div className="flex items-center gap-2 text-xs">
-            <button
-              onClick={() => fetchMoveBrowserFolders(null)}
-              className="text-blue-400 hover:text-blue-300"
-            >
-              Root
-            </button>
+            <button onClick={() => fetchMoveBrowserFolders(null)} className="text-blue-400 hover:text-blue-300">Root</button>
             {moveBreadcrumb.map((crumb) => (
               <span key={crumb.id} className="flex items-center gap-2">
                 <span className="text-gray-600">/</span>
-                <button
-                  onClick={() => fetchMoveBrowserFolders(crumb.id)}
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  {crumb.name}
-                </button>
+                <button onClick={() => fetchMoveBrowserFolders(crumb.id)} className="text-blue-400 hover:text-blue-300">{crumb.name}</button>
               </span>
             ))}
           </div>
-
-          {/* Move here button for current level */}
           <button
             onClick={() => handleMove(movingFileId, moveBrowserFolder ?? "root")}
             className="w-fit text-xs px-3 py-1.5 rounded-lg bg-green-600 hover:bg-green-500 text-white transition-colors"
           >
             ✓ Move here {moveBrowserFolder ? `(${moveBreadcrumb[moveBreadcrumb.length - 1]?.name})` : "(Root)"}
           </button>
-
-          {/* Subfolders to navigate into */}
-          {moveBrowserFolders.length > 0 && (
+          {moveBrowserFolders.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {moveBrowserFolders.map((folder) => (
                 <button
@@ -320,14 +327,13 @@ export default function FileExplorer() {
                 </button>
               ))}
             </div>
-          )}
-
-          {moveBrowserFolders.length === 0 && (
+          ) : (
             <p className="text-gray-600 text-xs">No subfolders here</p>
           )}
         </div>
       )}
 
+      {/* File explorer */}
       <div className="flex-1 overflow-y-auto p-4">
         {!searchResults && folders.length === 0 && files.length === 0 && (
           <div className="flex flex-col items-center justify-center h-64 text-gray-600">
@@ -346,10 +352,7 @@ export default function FileExplorer() {
                     <span className="text-yellow-500 text-lg">📁</span>
                     <span className="text-gray-200 text-sm truncate">{folder.name}</span>
                   </button>
-                  <button
-                    onClick={() => handleDeleteFolder(folder.id)}
-                    className="text-gray-700 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-1"
-                  >
+                  <button onClick={() => handleDeleteFolder(folder.id)} className="text-gray-700 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 transition-all ml-1">
                     ✕
                   </button>
                 </div>
@@ -391,32 +394,11 @@ export default function FileExplorer() {
                       <p className="text-gray-600 text-xs">{formatBytes(file.size)} · {file.account.googleEmail}</p>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                    <button
-                      onClick={() => handleDownload(file.id, file.name)}
-                      className="text-gray-500 hover:text-blue-400 text-xs px-2 py-1 rounded transition-colors"
-                    >
-                      Download
-                    </button>
-                    <button
-                      onClick={() => { setRenamingFileId(file.id); setRenameValue(file.name); }}
-                      className="text-gray-500 hover:text-yellow-400 text-xs px-2 py-1 rounded transition-colors"
-                    >
-                      Rename
-                    </button>
-                    <button
-                      onClick={() => setMovingFileId(movingFileId === file.id ? null : file.id)}
-                      className={`text-xs px-2 py-1 rounded transition-colors ${movingFileId === file.id ? "text-green-400" : "text-gray-500 hover:text-green-400"}`}
-                    >
-                      Move
-                    </button>
-                    <button
-                      onClick={() => handleDelete(file.id)}
-                      className="text-gray-500 hover:text-red-400 text-xs px-2 py-1 rounded transition-colors"
-                    >
-                      Delete
-                    </button>
+                    <button onClick={() => handleDownload(file.id, file.name)} className="text-gray-500 hover:text-blue-400 text-xs px-2 py-1 rounded transition-colors">Download</button>
+                    <button onClick={() => { setRenamingFileId(file.id); setRenameValue(file.name); }} className="text-gray-500 hover:text-yellow-400 text-xs px-2 py-1 rounded transition-colors">Rename</button>
+                    <button onClick={() => setMovingFileId(movingFileId === file.id ? null : file.id)} className={`text-xs px-2 py-1 rounded transition-colors ${movingFileId === file.id ? "text-green-400" : "text-gray-500 hover:text-green-400"}`}>Move</button>
+                    <button onClick={() => handleDelete(file.id)} className="text-gray-500 hover:text-red-400 text-xs px-2 py-1 rounded transition-colors">Delete</button>
                   </div>
                 </div>
               ))}

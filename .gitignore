@@ -3,3 +3,4 @@ dist/
 .env
 .env.local
 *.db
+frontend/.env

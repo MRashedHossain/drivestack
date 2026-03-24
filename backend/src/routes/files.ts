@@ -48,20 +48,21 @@ router.post("/upload", requireAuth, upload.single("file"), async (req: Request, 
       return;
     }
 
-    const { folderId } = req.body;
+    const { folderId, accountId } = req.body;  // accountId is now accepted
 
     const file = await uploadFile(
       user.id,
       req.file.originalname,
       req.file.mimetype,
       req.file.buffer,
-      folderId
+      folderId,
+      accountId  // pass it through
     );
 
     res.status(201).json(file);
-  } catch (err) {
+  } catch (err: any) {
     console.error("Upload error:", err);
-    res.status(500).json({ message: "Failed to upload file" });
+    res.status(500).json({ message: err.message || "Failed to upload file" });
   }
 });
 

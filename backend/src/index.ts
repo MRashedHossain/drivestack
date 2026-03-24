@@ -19,7 +19,7 @@ app.use(express.json());
 
 app.use(cors({
   origin: "http://localhost:5173",
-  credentials: true,  // allow cookies to be sent cross-origin
+  credentials: true,
 }));
 
 // Session middleware — passport needs this to store login state
@@ -52,10 +52,9 @@ app.get("/health", (req, res) => {
 async function main() {
   await prisma.$connect();
   console.log("✅ Database connected");
-
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  console.log(`Server running on http://localhost:${PORT}`);
+});
 }
 
 main().catch((err) => {

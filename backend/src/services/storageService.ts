@@ -69,7 +69,7 @@ export async function getBestAccountForUpload(userId: string, fileSizeInBytes: n
         const quota = await getStorageQuota(
           account.accessToken,
           account.refreshToken,
-          account.id  // pass accountId so token refresh saves to DB
+          account.id
         );
         return { account, free: quota.free };
       } catch {
@@ -78,14 +78,18 @@ export async function getBestAccountForUpload(userId: string, fileSizeInBytes: n
     })
   );
 
-  accountStorages.sort((a, b) => b.free - a.free);
-  const best = accountStorages[0];
+  // Filter out accounts that don't have enough space for this file
+  const eligible = accountStorages.filter((a) => a.free >= fileSizeInBytes);
 
-  if (best.free === 0 || best.free < fileSizeInBytes) {
+  if (eligible.length === 0) {
     throw new Error(
-      `Not enough storage on any single account. Need ${fileSizeInBytes} bytes but best account only has ${best.free} bytes free. Try linking more Google accounts.`
+      `Not enough storage on any single account. Need ${fileSizeInBytes} bytes. Try linking more Google accounts.`
     );
   }
 
-  return best.account;
+  // Sort by least free space first — fills up accounts one by one
+  // This way Account A gets filled before touching Account B
+  eligible.sort((a, b) => a.free - b.free);
+
+  return eligible[0].account;
 }

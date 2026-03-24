@@ -53,3 +53,38 @@ export async function getStorageQuota(
 
   return { total, used, free };
 }
+
+// Find or create a "DriveStack" folder in the given Google Drive account
+// This keeps our files organized and separate from the user's own Drive files
+export async function getOrCreateDriveStackFolder(
+  accessToken: string,
+  refreshToken: string,
+  accountId?: string
+): Promise<string> {
+  const auth = getOAuthClient(accessToken, refreshToken, accountId);
+  const drive = google.drive({ version: "v3", auth });
+
+  // Search for existing DriveStack folder
+  const searchRes = await drive.files.list({
+    q: "name='DriveStack' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+    fields: "files(id, name)",
+  });
+
+  const existing = searchRes.data.files?.[0];
+
+  // If it already exists return its id
+  if (existing?.id) {
+    return existing.id;
+  }
+
+  // Otherwise create it
+  const createRes = await drive.files.create({
+    requestBody: {
+      name: "DriveStack",
+      mimeType: "application/vnd.google-apps.folder",
+    },
+    fields: "id",
+  });
+
+  return createRes.data.id!;
+}

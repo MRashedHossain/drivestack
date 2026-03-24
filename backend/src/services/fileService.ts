@@ -1,30 +1,49 @@
 import { google } from "googleapis";
 import { Readable } from "stream";
-import { getOAuthClient } from "./driveService";
+import { getOAuthClient, getOrCreateDriveStackFolder } from "./driveService";
 import prisma from "../lib/prisma";
 import { getBestAccountForUpload } from "./storageService";
 
-// Upload a file to the best available Google Drive account
 export async function uploadFile(
   userId: string,
   fileName: string,
   mimeType: string,
   fileBuffer: Buffer,
-  folderId?: string
+  folderId?: string,
+  preferredAccountId?: string  // new optional param
 ) {
-    // Pick the account with the most free space that can fit this file
-    const account = await getBestAccountForUpload(userId, fileBuffer.length);
+  // Use preferred account if provided, otherwise auto-select
+  let account;
+
+  if (preferredAccountId) {
+    // Verify this account belongs to this user
+    account = await prisma.connectedAccount.findFirst({
+      where: { id: preferredAccountId, userId },
+    });
+    if (!account) throw new Error("Selected account not found");
+  } else {
+    // Auto-select account with most free space that fits the file
+    account = await getBestAccountForUpload(userId, fileBuffer.length);
+  }
+
+  // Get or create the DriveStack folder in this account's Drive
+  const driveStackFolderId = await getOrCreateDriveStackFolder(
+    account.accessToken,
+    account.refreshToken,
+    account.id
+  );
+
   const auth = getOAuthClient(account.accessToken, account.refreshToken, account.id);
   const drive = google.drive({ version: "v3", auth });
 
-  // Convert the file buffer to a readable stream (Drive API needs a stream)
   const fileStream = Readable.from(fileBuffer);
 
-  // Upload the file to Google Drive
+  // Upload into the DriveStack folder
   const driveResponse = await drive.files.create({
     requestBody: {
       name: fileName,
       mimeType: mimeType,
+      parents: [driveStackFolderId],  // put inside DriveStack folder
     },
     media: {
       mimeType: mimeType,
@@ -35,7 +54,6 @@ export async function uploadFile(
 
   const driveFile = driveResponse.data;
 
-  // Save file metadata to our DB so we know which account has it
   const file = await prisma.file.create({
     data: {
       userId,
@@ -48,7 +66,6 @@ export async function uploadFile(
     },
   });
 
-  // Convert BigInt to string for JSON response (JSON can't handle BigInt natively)
   return { ...file, size: file.size.toString() };
 }
 
